@@ -8,6 +8,8 @@ import {
     resetPasswordHandler,
     changePasswordHandler,
     changeUsernameHandler,
+    viewProfileHandler,
+    viewUserProfileHandler,
 } from "../controllers/user";
 import {
     signupValidator,
@@ -51,5 +53,9 @@ router.post(
 router.post("/change-password", requireSignIn, changePasswordValidator, changePasswordHandler);
 
 router.post("/change-username", requireSignIn, changeUsernameHandler);
+
+router.get("/profile", requireSignIn, viewProfileHandler);
+
+router.get("/profile/:user_id", viewUserProfileHandler)
 
 export default router;

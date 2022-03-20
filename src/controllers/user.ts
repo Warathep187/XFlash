@@ -13,7 +13,10 @@ import {
     ChangePassword,
     UserCheckingType,
     UserInformation,
+    Profile,
+    ProfileResponse,
 } from "../types/user";
+import { DeckInformation } from "../types/deck";
 import createEmailParams from "../services/email-params";
 
 aws.config.update({
@@ -275,7 +278,7 @@ export const resetPasswordHandler = async (req: Request, res: Response) => {
 export const changePasswordHandler = async (req: Request, res: Response) => {
     try {
         const { password } = req.body as ChangePassword;
-        const { _id } = req.body as UserInformation;
+        const { _id } = req.body.user as UserInformation;
 
         const salt = await bcrypt.genSalt(12);
         const hashedPassword = await bcrypt.hash(password.trim(), salt);
@@ -293,7 +296,8 @@ export const changePasswordHandler = async (req: Request, res: Response) => {
 
 export const changeUsernameHandler = async (req: Request, res: Response) => {
     try {
-        const { _id, username } = req.body as UserInformation;
+        const { username } = req.body as UserInformation;
+        const { _id } = req.body.user;
         if (!username || username.trim() === "") {
             res.status(400).send({
                 message: "Username must be provide",
@@ -303,9 +307,10 @@ export const changeUsernameHandler = async (req: Request, res: Response) => {
                 message: "Username must be less than 32 characters",
             });
         } else {
-            const isUsed = (await connection.query(`SELECT _id from users WHERE username = ? AND _id != "${_id}"`, [
-                username!.trim(),
-            ])) as unknown as UserCheckingType[];
+            const isUsed = (await connection.query(
+                `SELECT _id from users WHERE username = ? AND _id != "${_id}"`,
+                [username!.trim()]
+            )) as unknown as UserCheckingType[];
             if (isUsed.length > 0) {
                 res.status(400).send({
                     message: "Username has already been used",
@@ -315,11 +320,98 @@ export const changeUsernameHandler = async (req: Request, res: Response) => {
                     username!.trim(),
                 ]);
                 res.status(201).send({
-                    message: "Updated"
-                })
+                    message: "Updated",
+                });
             }
         }
     } catch (e) {
+        res.status(500).send({
+            message: "Something went wrong",
+        });
+    }
+};
+
+export const viewProfileHandler = async (req: Request, res: Response) => {
+    try {
+        const { _id } = req.body.user as { _id: string };
+        const query = `
+            SELECT users._id, users.email, users.username, COUNT(decks._id) as all_decks, COUNT(likes.user_id) as all_likes FROM users
+                LEFT JOIN decks
+                ON users._id = decks.created_by
+                LEFT JOIN likes
+                ON decks._id = likes.deck_id
+                GROUP BY users._id
+                HAVING users._id = ?
+        `;
+        const user = (await connection.query(query, [_id])) as unknown as Profile[];
+
+        const deckQuery = `
+            SELECT decks._id, title, description, is_public, created_by, created_at, COUNT(likes.user_id) as likes_length FROM decks
+                LEFT JOIN likes
+                ON decks._id = likes.deck_id
+                GROUP BY decks._id
+                HAVING created_by = ?
+                ORDER BY created_at desc
+        `
+        const decks = (await connection.query(deckQuery, [
+            _id,
+        ])) as unknown as DeckInformation[];
+        const profileResponse: ProfileResponse = {
+            user: {
+                _id: user[0]._id,
+                email: user[0].email,
+                username: user[0].username,
+                all_likes: user[0].all_likes,
+                all_decks: user[0].all_decks,
+            },
+            decks: decks,
+        };
+        res.status(200).send(profileResponse);
+    } catch (e) {
+        console.log(e);
+        res.status(500).send({
+            message: "Something went wrong",
+        });
+    }
+};
+
+export const viewUserProfileHandler = async (req: Request, res: Response) => {
+    try {
+        const { user_id } = req.params as { user_id: string };
+        const query = `
+            SELECT users._id, users.email, users.username, COUNT(decks._id) as all_decks, COUNT(likes.user_id) as all_likes FROM users
+                LEFT JOIN decks
+                ON users._id = decks.created_by AND decks.is_public = true
+                LEFT JOIN likes
+                ON decks._id = likes.deck_id
+                GROUP BY users._id
+                HAVING users._id = ?
+        `;
+        const user = (await connection.query(query, [user_id])) as unknown as Profile[];
+
+        const deckQuery = `
+            SELECT decks._id, title, description, is_public, created_by, created_at, COUNT(likes.user_id) as likes_length FROM decks
+                LEFT JOIN likes
+                ON decks._id = likes.deck_id
+                GROUP BY decks._id
+                HAVING created_by = ? AND is_public = true
+                ORDER BY created_at desc
+        `
+        const decks = (await connection.query(deckQuery, [
+            user_id,
+        ])) as unknown as DeckInformation[];
+        const profileResponse: ProfileResponse = {
+            user: {
+                _id: user[0]._id,
+                username: user[0].username,
+                all_likes: user[0].all_likes,
+                all_decks: user[0].all_decks,
+            },
+            decks: decks,
+        };
+        res.status(200).send(profileResponse);
+    } catch (e) {
+        console.log(e);
         res.status(500).send({
             message: "Something went wrong",
         });

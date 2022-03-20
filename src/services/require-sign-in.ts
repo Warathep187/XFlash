@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import connection from "../mysql_connection";
 
+
 const requireSignIn = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const authenticationHeaders: string = req.headers.authorization!;
@@ -24,7 +25,9 @@ const requireSignIn = async (req: Request, res: Response, next: NextFunction) =>
                             message: "Unauthorized",
                         })
                     }else {
-                        req.body._id = _id;
+                        req.body.user = {
+                            _id
+                        };
                         next();
                     }
                 }
