@@ -14,17 +14,28 @@ export const addCardValidator = async (req: Request, res: Response, next: NextFu
             })
         } else {
             let isPassed = true;
+            let isEmpty = false;
+            let isLong = false;
             for(const card of cards) {
                 if(card.front.trim() === "" || card.back.trim() === "") {
                     isPassed = false;
+                    isEmpty = true;
+                    break;
+                } else if(card.front.trim().length > 255 || card.back.trim().length > 255) {
+                    isPassed = false;
+                    isLong = true;
                     break;
                 }
             }
-            if(isPassed) {
+            if(isPassed && !isEmpty && !isLong) {
                 next();
-            } else {
+            } else if (isEmpty) {
                 res.status(400).send({
                     message: "Front text and Back text must be provide"
+                })
+            } else if(isLong) {
+                res.status(400).send({
+                    message: "Front text and Back text must be less than 256 characters"
                 })
             }
         }

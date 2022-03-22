@@ -1,5 +1,5 @@
 import mysql from "mysql2";
-import { usersSchema, decksSchema, cardsSchema, likesSchema } from "./schema";
+import { usersSchema, decksSchema, cardsSchema, likesSchema, bookmarksSchema } from "./schema";
 const util = require("util");
 
 const connection = mysql.createConnection({
@@ -27,6 +27,7 @@ export const createTables = async () => {
         await connection.query(`create table if not exists ${decksSchema}`);
         await connection.query(`create table if not exists ${cardsSchema}`);
         await connection.query(`create table if not exists ${likesSchema}`);
+        await connection.query(`create table if not exists ${bookmarksSchema}`);
     } catch (e: unknown) {
         if (e instanceof Error) {
             throw new Error(e.message);

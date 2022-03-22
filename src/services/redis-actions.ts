@@ -21,6 +21,15 @@ export const isExistingDeckCache = async (
     }
 };
 
+export const isExistingCache = async (deck_id: string, user_id: string) => {
+    try {
+        const isExisting = await client.hGet(deck_id, user_id);
+        return isExisting;
+    }catch(e) {
+        throw new Error("Something went wrong");
+    }
+}
+
 export const getDeckCache = async (
     deck_id: string,
     user_id: string
@@ -53,3 +62,11 @@ export const removeDeckCache = async (deck_id: string) => {
         throw new Error("Something went wrong");
     }
 };
+
+export const removeDeckCacheByUserId = async (deck_id: string, user_id: string) => {
+    try {
+        await client.hDel(deck_id, user_id);
+    }catch(e) {
+        throw new Error("Something went wrong");
+    }
+}

@@ -141,7 +141,7 @@ export const signInHandler = async (req: Request, res: Response) => {
     try {
         const { email, password } = req.body as UserSignIn;
         const user = (await connection.query(
-            `SELECT _id, email, password FROM users WHERE email = ?`,
+            `SELECT _id, email, password FROM users WHERE email = ? AND is_verified = true`,
             [email, password]
         )) as unknown as UserCheckingType[];
         if (user.length === 0) {
@@ -352,10 +352,8 @@ export const viewProfileHandler = async (req: Request, res: Response) => {
                 GROUP BY decks._id
                 HAVING created_by = ?
                 ORDER BY created_at desc
-        `
-        const decks = (await connection.query(deckQuery, [
-            _id,
-        ])) as unknown as DeckInformation[];
+        `;
+        const decks = (await connection.query(deckQuery, [_id])) as unknown as DeckInformation[];
         const profileResponse: ProfileResponse = {
             user: {
                 _id: user[0]._id,
@@ -368,7 +366,6 @@ export const viewProfileHandler = async (req: Request, res: Response) => {
         };
         res.status(200).send(profileResponse);
     } catch (e) {
-        console.log(e);
         res.status(500).send({
             message: "Something went wrong",
         });
@@ -389,31 +386,84 @@ export const viewUserProfileHandler = async (req: Request, res: Response) => {
         `;
         const user = (await connection.query(query, [user_id])) as unknown as Profile[];
 
-        const deckQuery = `
-            SELECT decks._id, title, description, is_public, created_by, created_at, COUNT(likes.user_id) as likes_length FROM decks
+        if (user.length === 0) {
+            res.status(404).send({
+                message: "Creator not found",
+            });
+        } else {
+            const deckQuery = `
+            SELECT decks._id, title, description, is_public, created_by, created_at, COUNT(likes.user_id) as likes_length
+            FROM decks
                 LEFT JOIN likes
                 ON decks._id = likes.deck_id
                 GROUP BY decks._id
                 HAVING created_by = ? AND is_public = true
                 ORDER BY created_at desc
-        `
-        const decks = (await connection.query(deckQuery, [
-            user_id,
-        ])) as unknown as DeckInformation[];
-        const profileResponse: ProfileResponse = {
-            user: {
-                _id: user[0]._id,
-                username: user[0].username,
-                all_likes: user[0].all_likes,
-                all_decks: user[0].all_decks,
-            },
-            decks: decks,
-        };
-        res.status(200).send(profileResponse);
+            `;
+            const decks = (await connection.query(deckQuery, [
+                user_id,
+            ])) as unknown as DeckInformation[];
+            const profileResponse: ProfileResponse = {
+                user: {
+                    _id: user[0]._id,
+                    username: user[0].username,
+                    all_likes: user[0].all_likes,
+                    all_decks: user[0].all_decks,
+                },
+                decks: decks,
+            };
+            res.status(200).send(profileResponse);
+        }
     } catch (e) {
-        console.log(e);
         res.status(500).send({
             message: "Something went wrong",
         });
     }
 };
+
+export const getTop5UsersHandler = async (_req: Request, res: Response) => {
+    try {
+        const query = `
+            SELECT users._id, users.username, COUNT(likes.user_id) as all_likes FROM users
+                LEFT JOIN decks
+                ON users._id = decks.created_by
+                LEFT JOIN likes
+                ON decks._id = likes.deck_id
+                WHERE decks.is_public = true
+                GROUP BY users._id
+                ORDER BY all_likes DESC
+                LIMIT 5
+        `
+        const users = await connection.query(query);
+        res.status(200).send({
+            users
+        })
+    }catch(e) {
+        res.status(500).send({
+            message: "Something went wrong",
+        })
+    }
+}
+
+export const viewBookmarksHandler = async (req: Request, res: Response) => {
+    try {
+        const {_id} = req.body.user as {_id: string};
+
+        const query = `
+            SELECT decks._id, decks.title, users.username FROM bookmarks
+                INNER JOIN decks
+                ON bookmarks.deck_id = decks._id
+                INNER JOIN users
+                ON decks.created_by = users._id
+                WHERE bookmarks.user_id = ?
+        `
+        const bookmarks = await connection.query(query, [_id]) as unknown as {deck_id: string; title: string; username: string}[];
+        res.status(200).send({
+            bookmarks
+        })
+    }catch(e) {
+        res.status(500).send({
+            message: "Something went wrong",
+        })
+    }
+}

@@ -19,7 +19,7 @@ const requireSignIn = async (req: Request, res: Response, next: NextFunction) =>
                     });
                 } else {
                     const { _id } = result as { _id: string };
-                    const user = await connection.query(`SELECT _id FROM users WHERE _id = ?`, [_id]) as unknown as {_id: string;}[];
+                    const user = await connection.query(`SELECT _id FROM users WHERE _id = ? AND is_verified = true`, [_id]) as unknown as {_id: string;}[];
                     if(user.length === 0) {
                         res.status(401).send({
                             message: "Unauthorized",

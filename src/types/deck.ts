@@ -18,9 +18,15 @@ export type DeckInformation = {
     /*
     likes: number
     */
-    cards_length?: number;
     likes_length: number;
+    in_bookmark?: number;
 };
+
+export type Top10DeckData = {
+    _id: string;
+    title: string;
+    likes_length: number;
+}
 
 export type DeckResponse = {
     deck: {
@@ -33,8 +39,9 @@ export type DeckResponse = {
             _id: string;
             username: string;
         };
-        cards: number;
         likes: number;
+        cards_length?: number;
+        in_bookmark?: number;
     };
     cards: Card[];
 };

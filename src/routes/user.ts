@@ -10,6 +10,8 @@ import {
     changeUsernameHandler,
     viewProfileHandler,
     viewUserProfileHandler,
+    getTop5UsersHandler,
+    viewBookmarksHandler
 } from "../controllers/user";
 import {
     signupValidator,
@@ -28,7 +30,7 @@ router.post(
     SignupHandler
 );
 
-router.post("/verify", requireSignIn, verifyAccountValidator, verifyAccountHandler);
+router.post("/verify", verifyAccountValidator, verifyAccountHandler);
 
 router.post(
     "/sign-in",
@@ -54,8 +56,12 @@ router.post("/change-password", requireSignIn, changePasswordValidator, changePa
 
 router.post("/change-username", requireSignIn, changeUsernameHandler);
 
+router.get("/top5", getTop5UsersHandler);
+
 router.get("/profile", requireSignIn, viewProfileHandler);
 
 router.get("/profile/:user_id", viewUserProfileHandler)
+
+router.get("/bookmarks", requireSignIn, viewBookmarksHandler);
 
 export default router;

@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { DeckInput, DeckInformation, DeckResponse } from "../types/deck";
+import { DeckInput, DeckInformation, DeckResponse, Top10DeckData } from "../types/deck";
 import { UserInformation } from "../types/user";
 import { Card } from "../types/card";
 import connection from "../mysql_connection";
@@ -9,6 +9,8 @@ import {
     setDeckCache,
     removeDeckCache,
     isExistingDeckCache,
+    isExistingCache,
+    removeDeckCacheByUserId,
 } from "../services/redis-actions";
 
 export const createDeckHandler = async (req: Request, res: Response) => {
@@ -33,13 +35,18 @@ export const getDeck = async (req: Request, res: Response) => {
     try {
         const { id } = req.params as { id: string };
         const _id: string = req.body.user ? req.body.user._id : "";
+        console.log(_id);
         const query = `
-            SELECT decks._id as deck_id, decks.title, decks.description, decks.is_public, decks.created_at, users._id as created_by, users.username as username, count(cards._id) as cards_length , count(likes.user_id) as likes_length
+            SELECT decks._id as deck_id, decks.title, decks.description, decks.is_public, decks.created_at, users._id as created_by, users.username as username, COUNT(likes.user_id) as likes_length
+                ${_id === "" ? "" : ", COUNT(bookmarks.user_id) as in_bookmark"}
             FROM decks
-                INNER JOIN users
+                LEFT JOIN users
                 ON decks.created_by = users._id
-                LEFT JOIN cards
-                ON decks._id = cards.deck_id
+                ${
+                    _id === ""
+                        ? ""
+                        : `LEFT JOIN bookmarks ON decks._id = bookmarks.deck_id AND bookmarks.user_id = "${_id}"`
+                }
                 LEFT JOIN likes
                 ON decks._id = likes.deck_id
                 GROUP BY decks._id
@@ -74,8 +81,9 @@ export const getDeck = async (req: Request, res: Response) => {
                                     _id,
                                     username: deck[0].username!,
                                 },
-                                cards: deck[0].cards_length!,
                                 likes: deck[0].likes_length,
+                                cards_length: cards.length,
+                                in_bookmark: deck[0].in_bookmark!,
                             },
                             cards: cards,
                         };
@@ -99,8 +107,8 @@ export const getDeck = async (req: Request, res: Response) => {
                                 _id,
                                 username: deck[0].username!,
                             },
-                            cards: deck[0].cards_length!,
                             likes: deck[0].likes_length,
+                            cards_length: cards.length,
                         },
                         cards: cards,
                     };
@@ -129,8 +137,9 @@ export const getDeck = async (req: Request, res: Response) => {
                                     _id,
                                     username: deck[0].username!,
                                 },
-                                cards: deck[0].cards_length!,
                                 likes: deck[0].likes_length,
+                                cards_length: cards.length,
+                                in_bookmark: deck[0].in_bookmark!,
                             },
                             cards: cards,
                         };
@@ -152,6 +161,28 @@ export const getDeck = async (req: Request, res: Response) => {
     }
 };
 
+export const getTop5DeckHandler = async (_req: Request, res: Response) => {
+    try {
+        const query = `
+            SELECT decks._id, decks.title, COUNT(likes.user_id) as likes_length FROM decks
+                LEFT JOIN likes
+                ON decks._id = likes.deck_id
+                WHERE decks.is_public = true
+                GROUP BY decks._id
+                ORDER BY likes_length DESC
+                LIMIT 5
+        `;
+        const decks = (await connection.query(query)) as unknown as Top10DeckData[];
+        res.status(200).send({
+            decks,
+        });
+    } catch (e) {
+        res.status(500).send({
+            message: "Something went wrong",
+        });
+    }
+};
+
 export const editDeckInformationHandler = async (req: Request, res: Response) => {
     try {
         const { _id } = req.body.user as { _id: string };
@@ -159,6 +190,7 @@ export const editDeckInformationHandler = async (req: Request, res: Response) =>
         const deck = (await connection.query(
             `SELECT created_by FROM decks WHERE _id = "${id}"`
         )) as unknown as DeckInformation[];
+        console.log(deck);
         if (deck.length === 0) {
             res.status(404).send({
                 message: "Deck not found",
@@ -180,6 +212,12 @@ export const editDeckInformationHandler = async (req: Request, res: Response) =>
                 const isExisting = await isExistingDeckCache(id);
                 if (isExisting) {
                     removeDeckCache(id);
+                }
+                if (!is_public) {
+                    await connection.query(
+                        "DELETE FROM bookmarks WHERE deck_id = ? AND user_id != ?",
+                        [id, _id]
+                    );
                 }
             }
         }
@@ -220,7 +258,6 @@ export const deleteDeckHandler = async (req: Request, res: Response) => {
             }
         }
     } catch (e) {
-        console.log(e);
         res.status(500).send({
             message: "Something went wrong",
         });
@@ -241,7 +278,7 @@ export const searchDeckHandler = async (req: Request, res: Response) => {
                     ON decks.created_by = users._id
                     WHERE decks.title LIKE ?
             `;
-            const decks = (await connection.query(query, [`%${key}%`])) as unknown as {
+            const decks = (await connection.query(query, [`${key}%`])) as unknown as {
                 _id: string;
                 title: string;
                 username: string;
@@ -362,6 +399,11 @@ export const unlikeDeckHandler = async (req: Request, res: Response) => {
                     res.status(201).send({
                         message: "UnLiked",
                     });
+
+                    const isExisting = await isExistingDeckCache(id);
+                    if (isExisting) {
+                        removeDeckCache(id);
+                    }
                 } else {
                     if (like[0].created_by === _id) {
                         await connection.query(
@@ -371,11 +413,166 @@ export const unlikeDeckHandler = async (req: Request, res: Response) => {
                         res.status(201).send({
                             message: "UnLiked",
                         });
+
+                        const isExisting = await isExistingDeckCache(id);
+                        if (isExisting) {
+                            removeDeckCache(id);
+                        }
                     } else {
                         res.status(403).send({
                             message: "Access denied",
                         });
                     }
+                }
+            }
+        }
+    } catch (e) {
+        res.status(500).send({
+            message: "Something went wrong",
+        });
+    }
+};
+
+export const addToBookmarkHandler = async (req: Request, res: Response) => {
+    try {
+        const { _id } = req.body.user as { _id: string };
+        const { id } = req.body as { id: string };
+
+        const deck = (await connection.query(
+            `SELECT _id, is_public, created_by FROM decks WHERE _id = ?`,
+            [id]
+        )) as unknown as { _id: string; is_public: boolean; created_by: string }[];
+        if (deck.length === 0) {
+            res.status(404).send({
+                message: "Deck not found",
+            });
+        } else {
+            if (deck[0].is_public) {
+                const isInBookmark = (await connection.query(
+                    `SELECT user_id FROM bookmarks WHERE user_id = ? AND deck_id = ?`,
+                    [_id, id]
+                )) as unknown as { user_id: string }[];
+                if (isInBookmark.length > 0) {
+                    res.status(400).send({
+                        message: "You already saved this deck",
+                    });
+                } else {
+                    await connection.query(
+                        `INSERT INTO bookmarks(user_id, deck_id) VALUES (?, ?)`,
+                        [_id, id]
+                    );
+                    res.status(201).send({
+                        message: "Saved",
+                    });
+
+                    const isExisting = await isExistingCache(id, _id);
+                    if (isExisting) {
+                        await removeDeckCacheByUserId(id, _id);
+                    }
+                }
+            } else {
+                if (_id === deck[0].created_by) {
+                    const isInBookmark = (await connection.query(
+                        `SELECT user_id FROM bookmarks WHERE user_id = ? AND deck_id = ?`,
+                        [_id, id]
+                    )) as unknown as { user_id: string }[];
+                    if (isInBookmark.length > 0) {
+                        res.status(400).send({
+                            message: "You already saved this deck",
+                        });
+                    } else {
+                        await connection.query(
+                            `INSERT INTO bookmarks(user_id, deck_id) VALUES (?, ?)`,
+                            [_id, id]
+                        );
+                        res.status(201).send({
+                            message: "Saved",
+                        });
+
+                        const isExisting = await isExistingCache(id, _id);
+                        if (isExisting) {
+                            await removeDeckCacheByUserId(id, _id);
+                        }
+                    }
+                } else {
+                    res.status(403).send({
+                        message: "Deck is private",
+                    });
+                }
+            }
+        }
+    } catch (e) {
+        res.status(500).send({
+            message: "Something went wrong",
+        });
+    }
+};
+
+export const removeBookmarkHandler = async (req: Request, res: Response) => {
+    try {
+        const { _id } = req.body.user as { _id: string };
+        const { id } = req.body as { id: string };
+
+        const deck = (await connection.query(
+            `SELECT _id, is_public, created_by FROM decks WHERE _id = ?`,
+            [id]
+        )) as unknown as { _id: string; is_public: boolean; created_by: string }[];
+        if (deck.length === 0) {
+            res.status(404).send({
+                message: "Deck not found",
+            });
+        } else {
+            if (deck[0].is_public) {
+                const isInBookmark = (await connection.query(
+                    `SELECT user_id FROM bookmarks WHERE user_id = ? AND deck_id = ?`,
+                    [_id, id]
+                )) as unknown as { user_id: string }[];
+                if (isInBookmark.length === 0) {
+                    res.status(400).send({
+                        message: "Could not remove from bookmark",
+                    });
+                } else {
+                    await connection.query(
+                        `DELETE FROM bookmarks WHERE user_id = ? AND deck_id = ?`,
+                        [_id, id]
+                    );
+                    res.status(201).send({
+                        message: "Removed",
+                    });
+
+                    const isExisting = await isExistingCache(id, _id);
+                    if (isExisting) {
+                        await removeDeckCacheByUserId(id, _id);
+                    }
+                }
+            } else {
+                if (_id === deck[0].created_by) {
+                    const isInBookmark = (await connection.query(
+                        `SELECT user_id FROM bookmarks WHERE user_id = ? AND deck_id = ?`,
+                        [_id, id]
+                    )) as unknown as { user_id: string }[];
+                    if (isInBookmark.length === 0) {
+                        res.status(400).send({
+                            message: "Could not remove from bookmark",
+                        });
+                    } else {
+                        await connection.query(
+                            `DELETE FROM bookmarks WHERE user_id = ? AND deck_id = ?`,
+                            [_id, id]
+                        );
+                        res.status(201).send({
+                            message: "Removed",
+                        });
+
+                        const isExisting = await isExistingCache(id, _id);
+                        if (isExisting) {
+                            await removeDeckCacheByUserId(id, _id);
+                        }
+                    }
+                } else {
+                    res.status(403).send({
+                        message: "Deck is private",
+                    });
                 }
             }
         }

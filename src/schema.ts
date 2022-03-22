@@ -1,8 +1,8 @@
 export const usersSchema = `
     users (
         _id varchar(100) not null primary key,
-        email varchar(100) not null,
-        username varchar(32) default "",
+        email varchar(100) not null unique,
+        username varchar(32) default "" unique,
         password varchar(255) not null,
         is_verified boolean default false,
         security_key varchar(100) default ""
@@ -37,6 +37,15 @@ export const likesSchema = `
         user_id varchar(100) not null,
         deck_id varchar(100) not null,
         foreign key(user_id) references users(_id) on delete cascade,
+        foreign key(deck_id) references decks(_id) on delete cascade
+    )
+`
+
+export const bookmarksSchema = `
+    bookmarks (
+        user_id varchar(100) not null,
+        deck_id varchar(100) not null,
+        foreign key(user_id) references users(_id),
         foreign key(deck_id) references decks(_id) on delete cascade
     )
 `
