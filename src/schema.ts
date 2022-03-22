@@ -1,51 +1,51 @@
 export const usersSchema = `
     users (
-        _id varchar(100) not null primary key,
-        email varchar(100) not null unique,
-        username varchar(32) default "" unique,
-        password varchar(255) not null,
-        is_verified boolean default false,
-        security_key varchar(100) default ""
+        _id VARCHAR(100) NOT NULL PRIMARY KEY,
+        email VARCHAR(100) NOT NULL UNIQUE,
+        username VARCHAR(32) DEFAULT "" UNIQUE,
+        password VARCHAR(255) NOT NULL,
+        is_verified BOOLEAN DEFAULT FALSE,
+        security_key VARCHAR(100) DEFAULT ""
     )
 `;
 
 export const decksSchema = `
     decks (
-        _id varchar(100) not null primary key,
-        title varchar(255) not null,
-        description varchar(512) default "",
-        is_public boolean default false,
-        created_by varchar(100) not null,
-        created_at datetime default now(),
-        foreign key(created_by) references users(_id)
+        _id VARCHAR(100) NOT NULL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        description VARCHAR(512) DEFAULT "",
+        is_public BOOLEAN DEFAULT FALSE,
+        created_by VARCHAR(100) NOT NULL,
+        created_at DATETIME DEFAULT NOW(),
+        FOREIGN KEY(created_by) REFERENCES users(_id)
     )
 `
 
 export const cardsSchema = `
     cards (
-        _id varchar(100) not null primary key,
-        order_ int not null,
-        front varchar(255) not null,
-        back varchar(255) not null,
-        deck_id varchar(100) not null,
-        foreign key(deck_id) references decks(_id) on delete cascade
+        _id VARCHAR(100) NOT NULL PRIMARY KEY,
+        order_ INT NOT NULL,
+        front VARCHAR(255) NOT NULL,
+        back VARCHAR(255) NOT NULL,
+        deck_id VARCHAR(100) NOT NULL,
+        FOREIGN KEY(deck_id) REFERENCES decks(_id) ON DELETE CASCADE
     )
 `
 
 export const likesSchema = `
     likes (
-        user_id varchar(100) not null,
-        deck_id varchar(100) not null,
-        foreign key(user_id) references users(_id) on delete cascade,
-        foreign key(deck_id) references decks(_id) on delete cascade
+        user_id VARCHAR(100) NOT NULL,
+        deck_id VARCHAR(100) NOT NULL,
+        FOREIGN KEY(user_id) REFERENCES users(_id) ON DELETE CASCADE,
+        FOREIGN KEY(deck_id) REFERENCES decks(_id) ON DELETE CASCADE
     )
 `
 
 export const bookmarksSchema = `
     bookmarks (
-        user_id varchar(100) not null,
-        deck_id varchar(100) not null,
-        foreign key(user_id) references users(_id),
-        foreign key(deck_id) references decks(_id) on delete cascade
+        user_id VARCHAR(100) NOT NULL,
+        deck_id VARCHAR(100) NOT NULL,
+        FOREIGN KEY(user_id) REFERENCES users(_id),
+        FOREIGN KEY(deck_id) REFERENCES decks(_id) ON DELETE CASCADE
     )
 `
